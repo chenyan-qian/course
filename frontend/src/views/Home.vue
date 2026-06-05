@@ -9,66 +9,89 @@
       </div>
     </div>
 
-    <!-- 功能 Tabs -->
-    <el-tabs v-model="activeTab" type="border-card">
-      <!-- ==================== 课程管理 ==================== -->
-      <el-tab-pane label="📖 课程管理" name="course">
-        <div class="toolbar">
-          <el-button type="primary" @click="openCourseDialog()">+ 添加课程</el-button>
-          <el-button type="danger" :disabled="selectedCourses.length === 0"
-            @click="batchDelCourse">批量删除 ({{ selectedCourses.length }})</el-button>
+    <!-- 主体：左侧导航 + 右侧内容 -->
+    <div class="main-body">
+      <!-- 左侧导航 -->
+      <div class="sidebar">
+        <div
+          class="sidebar-item"
+          :class="{ active: activeTab === 'course' }"
+          @click="activeTab = 'course'"
+        >
+          <span class="sidebar-icon">📖</span>
+          <span class="sidebar-text">课程管理</span>
+        </div>
+        <div
+          class="sidebar-item"
+          :class="{ active: activeTab === 'kp' }"
+          @click="activeTab = 'kp'"
+        >
+          <span class="sidebar-icon">📝</span>
+          <span class="sidebar-text">知识点管理</span>
+        </div>
+      </div>
+
+      <!-- 右侧内容区 -->
+      <div class="content">
+        <!-- ==================== 课程管理 ==================== -->
+        <div v-show="activeTab === 'course'">
+          <div class="toolbar">
+            <el-button type="primary" @click="openCourseDialog()">+ 添加课程</el-button>
+            <el-button type="danger" :disabled="selectedCourses.length === 0"
+              @click="batchDelCourse">批量删除 ({{ selectedCourses.length }})</el-button>
+          </div>
+
+          <el-table :data="courses" border stripe style="width: 100%"
+            @selection-change="onCourseSelectionChange">
+            <el-table-column type="selection" width="45" />
+            <el-table-column prop="id" label="ID" width="60" />
+            <el-table-column prop="name" label="课程名称" />
+            <el-table-column prop="teacher" label="授课教师" />
+            <el-table-column prop="classroom" label="教室" />
+            <el-table-column prop="weekday" label="星期" />
+            <el-table-column prop="timeSlot" label="时间" />
+            <el-table-column label="操作" width="180">
+              <template #default="{ row }">
+                <el-button size="small" @click="openCourseDialog(row)">编辑</el-button>
+                <el-button size="small" type="danger" @click="delCourse(row.id)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <!-- 课程弹窗 -->
+          <el-dialog v-model="courseDialogVisible" :title="isCourseEdit ? '编辑课程' : '添加课程'" width="450px">
+            <el-form label-width="80px" :model="courseForm">
+              <el-form-item label="课程名称">
+                <el-input v-model="courseForm.name" />
+              </el-form-item>
+              <el-form-item label="授课教师">
+                <el-input v-model="courseForm.teacher" />
+              </el-form-item>
+              <el-form-item label="教室">
+                <el-input v-model="courseForm.classroom" />
+              </el-form-item>
+              <el-form-item label="星期">
+                <el-select v-model="courseForm.weekday" style="width: 100%">
+                  <el-option v-for="d in ['周一','周二','周三','周四','周五','周六','周日']" :key="d" :label="d" :value="d" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="时间">
+                <el-input v-model="courseForm.timeSlot" placeholder="如：8:00-9:30" />
+              </el-form-item>
+            </el-form>
+            <template #footer>
+              <el-button @click="courseDialogVisible = false">取消</el-button>
+              <el-button type="primary" @click="saveCourse">保存</el-button>
+            </template>
+          </el-dialog>
         </div>
 
-        <el-table :data="courses" border stripe style="width: 100%"
-          @selection-change="onCourseSelectionChange">
-          <el-table-column type="selection" width="45" />
-          <el-table-column prop="id" label="ID" width="60" />
-          <el-table-column prop="name" label="课程名称" />
-          <el-table-column prop="teacher" label="授课教师" />
-          <el-table-column prop="classroom" label="教室" />
-          <el-table-column prop="weekday" label="星期" />
-          <el-table-column prop="timeSlot" label="时间" />
-          <el-table-column label="操作" width="180">
-            <template #default="{ row }">
-              <el-button size="small" @click="openCourseDialog(row)">编辑</el-button>
-              <el-button size="small" type="danger" @click="delCourse(row.id)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <!-- 课程弹窗 -->
-        <el-dialog v-model="courseDialogVisible" :title="isCourseEdit ? '编辑课程' : '添加课程'" width="450px">
-          <el-form label-width="80px" :model="courseForm">
-            <el-form-item label="课程名称">
-              <el-input v-model="courseForm.name" />
-            </el-form-item>
-            <el-form-item label="授课教师">
-              <el-input v-model="courseForm.teacher" />
-            </el-form-item>
-            <el-form-item label="教室">
-              <el-input v-model="courseForm.classroom" />
-            </el-form-item>
-            <el-form-item label="星期">
-              <el-select v-model="courseForm.weekday" style="width: 100%">
-                <el-option v-for="d in ['周一','周二','周三','周四','周五','周六','周日']" :key="d" :label="d" :value="d" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="时间">
-              <el-input v-model="courseForm.timeSlot" placeholder="如：8:00-9:30" />
-            </el-form-item>
-          </el-form>
-          <template #footer>
-            <el-button @click="courseDialogVisible = false">取消</el-button>
-            <el-button type="primary" @click="saveCourse">保存</el-button>
-          </template>
-        </el-dialog>
-      </el-tab-pane>
-
-      <!-- ==================== 知识点管理 ==================== -->
-      <el-tab-pane label="📝 知识点管理" name="kp">
-        <KnowledgePoint />
-      </el-tab-pane>
-    </el-tabs>
+        <!-- ==================== 知识点管理 ==================== -->
+        <div v-show="activeTab === 'kp'">
+          <KnowledgePoint />
+        </div>
+      </div>
+    </div>
 
     <!-- 修改密码弹窗 -->
     <el-dialog v-model="pwdDialogVisible" title="修改密码" width="400px">
@@ -217,21 +240,80 @@ onMounted(() => {
 
 <style scoped>
 .home-container {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 20px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
 }
 
+/* ========== 顶部导航 ========== */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  padding: 0 24px;
+  height: 60px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
 }
 
 .header h1 {
   margin: 0;
   color: #333;
+  font-size: 20px;
+}
+
+/* ========== 主体布局 ========== */
+.main-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ========== 左侧导航 ========== */
+.sidebar {
+  width: 200px;
+  background: #304156;
+  flex-shrink: 0;
+  padding-top: 8px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  padding: 14px 20px;
+  cursor: pointer;
+  color: #bfcbd9;
+  transition: all 0.2s;
+  font-size: 15px;
+}
+
+.sidebar-item:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-item.active {
+  color: #fff;
+  background: #409eff;
+}
+
+.sidebar-icon {
+  margin-right: 10px;
+  font-size: 18px;
+}
+
+.sidebar-text {
+  white-space: nowrap;
+}
+
+/* ========== 右侧内容区 ========== */
+.content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background: #f0f2f5;
 }
 
 .toolbar {
