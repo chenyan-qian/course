@@ -1,0 +1,3 @@
+# 在 frontend 目录下创建 start.bat
+cd C:\Users\34026\Desktop\个人课程管理系统\frontend
+echo "npm run dev" > start.bat

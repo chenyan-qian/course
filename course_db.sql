@@ -1,0 +1,34 @@
+-- 创建数据库
+CREATE DATABASE IF NOT EXISTS course_db DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci;
+
+USE course_db;
+
+-- 用户表
+CREATE TABLE IF NOT EXISTS sys_user (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password VARCHAR(100) NOT NULL,
+    nickname VARCHAR(50)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- 课程表
+CREATE TABLE IF NOT EXISTS course (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    teacher VARCHAR(50),
+    classroom VARCHAR(50),
+    weekday VARCHAR(10),
+    time_slot VARCHAR(50)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- 知识点表
+CREATE TABLE IF NOT EXISTS knowledge_point (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    user_id BIGINT NOT NULL,
+    course_id BIGINT,
+    title VARCHAR(200) NOT NULL,
+    content TEXT,
+    tags VARCHAR(200),
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
