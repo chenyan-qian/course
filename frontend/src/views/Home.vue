@@ -15,6 +15,14 @@
       <div class="sidebar">
         <div
           class="sidebar-item"
+          :class="{ active: activeTab === 'dashboard' }"
+          @click="activeTab = 'dashboard'"
+        >
+          <span class="sidebar-icon">🏠</span>
+          <span class="sidebar-text">首页</span>
+        </div>
+        <div
+          class="sidebar-item"
           :class="{ active: activeTab === 'course' }"
           @click="activeTab = 'course'"
         >
@@ -41,6 +49,11 @@
 
       <!-- 右侧内容区 -->
       <div class="content">
+        <!-- ==================== 首页 ==================== -->
+        <div v-show="activeTab === 'dashboard'" class="content-page content-page-dashboard">
+          <Dashboard />
+        </div>
+
         <!-- ==================== 课程管理 ==================== -->
         <div v-show="activeTab === 'course'">
           <div class="toolbar">
@@ -194,10 +207,11 @@ import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import KnowledgePoint from './KnowledgePoint.vue'
+import Dashboard from './Dashboard.vue'
 import Homework from './Homework.vue'
 
 const router = useRouter()
-const activeTab = ref('course')
+const activeTab = ref('dashboard')
 
 // ========== 修改密码 ==========
 const pwdDialogVisible = ref(false)
@@ -480,6 +494,10 @@ onMounted(() => {
   padding: 20px;
   overflow-y: auto;
   background: #f0f2f5;
+}
+
+.content-page-dashboard {
+  height: 100%;
 }
 
 .toolbar {
