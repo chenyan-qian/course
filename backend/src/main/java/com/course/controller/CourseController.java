@@ -26,6 +26,7 @@ public class CourseController {
     @PostMapping
     public Map<String, Object> add(@RequestBody Course course) {
         Map<String, Object> map = new HashMap<>();
+        courseService.checkTimeConflict(course);
         boolean ok = courseService.save(course);
         map.put("code", ok ? 200 : 500);
         map.put("msg", ok ? "添加成功" : "添加失败");
@@ -36,6 +37,7 @@ public class CourseController {
     @PutMapping
     public Map<String, Object> update(@RequestBody Course course) {
         Map<String, Object> map = new HashMap<>();
+        courseService.checkTimeConflict(course);
         boolean ok = courseService.updateById(course);
         map.put("code", ok ? 200 : 500);
         map.put("msg", ok ? "修改成功" : "修改失败");

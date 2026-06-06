@@ -29,6 +29,14 @@
           <span class="sidebar-icon">📝</span>
           <span class="sidebar-text">知识点管理</span>
         </div>
+        <div
+          class="sidebar-item"
+          :class="{ active: activeTab === 'hw' }"
+          @click="activeTab = 'hw'"
+        >
+          <span class="sidebar-icon">📋</span>
+          <span class="sidebar-text">作业管理</span>
+        </div>
       </div>
 
       <!-- 右侧内容区 -->
@@ -36,27 +44,88 @@
         <!-- ==================== 课程管理 ==================== -->
         <div v-show="activeTab === 'course'">
           <div class="toolbar">
-            <el-button type="primary" @click="openCourseDialog()">+ 添加课程</el-button>
-            <el-button type="danger" :disabled="selectedCourses.length === 0"
-              @click="batchDelCourse">批量删除 ({{ selectedCourses.length }})</el-button>
+            <div class="toolbar-left">
+              <el-button type="primary" @click="openCourseDialog()">+ 添加课程</el-button>
+              <el-button type="danger" :disabled="selectedCourses.length === 0"
+                @click="batchDelCourse">批量删除 ({{ selectedCourses.length }})</el-button>
+            </div>
+            <div class="toolbar-right">
+              <el-radio-group v-model="viewMode" size="small">
+                <el-radio-button value="table">📋 列表</el-radio-button>
+                <el-radio-button value="timetable">📅 课表</el-radio-button>
+              </el-radio-group>
+            </div>
           </div>
 
-          <el-table :data="courses" border stripe style="width: 100%"
-            @selection-change="onCourseSelectionChange">
-            <el-table-column type="selection" width="45" />
-            <el-table-column prop="id" label="ID" width="60" />
-            <el-table-column prop="name" label="课程名称" />
-            <el-table-column prop="teacher" label="授课教师" />
-            <el-table-column prop="classroom" label="教室" />
-            <el-table-column prop="weekday" label="星期" />
-            <el-table-column prop="timeSlot" label="时间" />
-            <el-table-column label="操作" width="180">
-              <template #default="{ row }">
-                <el-button size="small" @click="openCourseDialog(row)">编辑</el-button>
-                <el-button size="small" type="danger" @click="delCourse(row.id)">删除</el-button>
+          <!-- ========== 列表视图 ========== -->
+          <div v-show="viewMode === 'table'">
+            <el-table :data="courses" border stripe style="width: 100%"
+              @selection-change="onCourseSelectionChange">
+              <el-table-column type="selection" width="45" />
+              <el-table-column prop="id" label="ID" width="60" />
+              <el-table-column prop="name" label="课程名称" />
+              <el-table-column prop="teacher" label="授课教师" />
+              <el-table-column prop="classroom" label="教室" />
+              <el-table-column prop="weekday" label="星期" />
+              <el-table-column prop="timeSlot" label="时间" />
+              <el-table-column label="操作" width="180">
+                <template #default="{ row }">
+                  <el-button size="small" @click="openCourseDialog(row)">编辑</el-button>
+                  <el-button size="small" type="danger" @click="delCourse(row.id)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <!-- ========== 课表视图 ========== -->
+          <div v-show="viewMode === 'timetable'" class="timetable-wrapper">
+            <div class="timetable-grid" v-if="timetableCourses.length > 0">
+              <!-- 顶部星期头 -->
+              <div class="timetable-corner">时间</div>
+              <div class="timetable-day-header" v-for="day in DAYS" :key="day">
+                {{ day }}
+              </div>
+              <!-- 时间标签列（左） + 课程卡片区 -->
+              <template v-for="(time, idx) in TIME_SLOTS" :key="idx">
+                <div
+                  class="timetable-time-label"
+                  v-if="idx % 2 === 0"
+                  :style="{ gridRow: idx + 2 }"
+                >
+                  {{ time }}
+                </div>
+                <div
+                  class="timetable-cell"
+                  :class="{ 'timetable-cell-odd': Math.floor(idx / 2) % 2 === 0 }"
+                  :style="{ gridRow: idx + 2, gridColumn: dayIdx + 2 }"
+                  v-for="dayIdx in 7"
+                  :key="dayIdx"
+                ></div>
               </template>
-            </el-table-column>
-          </el-table>
+              <!-- 课程卡片（覆盖在格子上方） -->
+              <div
+                v-for="c in timetableCourses"
+                :key="c.id"
+                class="timetable-course"
+                :style="{
+                  gridRow: (c.startRow) + ' / span ' + c.span,
+                  gridColumn: (c.dayIndex + 2),
+                  backgroundColor: c.color,
+                  borderLeftColor: c.borderColor
+                }"
+                @click="openCourseDialog(c)"
+                :title="`${c.name}\n教师：${c.teacher}\n教室：${c.classroom}\n${c.weekday} ${c.timeSlot}`"
+              >
+                <div class="tc-name">{{ c.name }}</div>
+                <div class="tc-room" v-if="c.classroom">🏫 {{ c.classroom }}</div>
+                <div class="tc-teacher" v-if="c.teacher">👨‍🏫 {{ c.teacher }}</div>
+                <div class="tc-time">{{ c.timeSlot }}</div>
+              </div>
+            </div>
+            <div v-else class="timetable-empty">
+              <p>暂无课程，点击 "+ 添加课程" 开始吧 📚</p>
+            </div>
+          </div>
 
           <!-- 课程弹窗 -->
           <el-dialog v-model="courseDialogVisible" :title="isCourseEdit ? '编辑课程' : '添加课程'" width="450px">
@@ -90,6 +159,11 @@
         <div v-show="activeTab === 'kp'">
           <KnowledgePoint />
         </div>
+
+        <!-- ==================== 作业管理 ==================== -->
+        <div v-show="activeTab === 'hw'">
+          <Homework />
+        </div>
       </div>
     </div>
 
@@ -115,11 +189,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import KnowledgePoint from './KnowledgePoint.vue'
+import Homework from './Homework.vue'
 
 const router = useRouter()
 const activeTab = ref('course')
@@ -167,6 +242,80 @@ const changePassword = async () => {
 }
 
 // ========== 课程管理 ==========
+const viewMode = ref('table') // 'table' | 'timetable'
+const DAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+
+// 生成 30 分钟一档的时间槽（8:00 ~ 22:00）
+const TIME_SLOTS = (() => {
+  const slots = []
+  for (let h = 8; h < 22; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      slots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+    }
+  }
+  return slots
+})()
+
+// 课程色板
+const COURSE_COLORS = [
+  { bg: '#e8f4fd', border: '#2196f3' },
+  { bg: '#fff3e0', border: '#ff9800' },
+  { bg: '#e8f5e9', border: '#4caf50' },
+  { bg: '#fce4ec', border: '#e91e63' },
+  { bg: '#f3e5f5', border: '#9c27b0' },
+  { bg: '#e0f2f1', border: '#009688' },
+  { bg: '#fff8e1', border: '#ffc107' },
+  { bg: '#e3f2fd', border: '#1976d2' },
+  { bg: '#fbe9e7', border: '#ff5722' },
+  { bg: '#e0f7fa', border: '#00bcd4' },
+  { bg: '#f1f8e9', border: '#8bc34a' },
+  { bg: '#ede7f6', border: '#673ab7' },
+]
+let colorIdx = 0
+const colorMap = {}
+const getCourseColor = (id) => {
+  if (!colorMap[id]) {
+    colorMap[id] = COURSE_COLORS[colorIdx % COURSE_COLORS.length]
+    colorIdx++
+  }
+  return colorMap[id]
+}
+
+// 将 timeSlot "8:00-9:30" 转为以 08:00 为起点的分钟数
+const parseTimeToMinutes = (timeSlot) => {
+  try {
+    const [start, end] = timeSlot.split('-')
+    const toMin = (t) => {
+      const [h, m] = t.trim().split(':').map(Number)
+      return h * 60 + m
+    }
+    return [toMin(start), toMin(end)]
+  } catch {
+    return [480, 570] // fallback
+  }
+}
+
+// 课表数据：把每个课程定位到 grid 坐标
+const timetableCourses = computed(() => {
+  const BASE = 480 // 08:00 = 480分钟
+  return courses.value.map(c => {
+    const [startMin, endMin] = parseTimeToMinutes(c.timeSlot)
+    const dayIndex = DAYS.indexOf(c.weekday)
+    // 每 30 分钟一个格子，+2 是因为第 1 行是 header
+    const startRow = Math.round((startMin - BASE) / 30) + 2
+    const span = Math.max(1, Math.round((endMin - startMin) / 30))
+    const palette = getCourseColor(c.id)
+    return {
+      ...c,
+      dayIndex,
+      startRow,
+      span,
+      color: palette.bg,
+      borderColor: palette.border
+    }
+  })
+})
+
 const courses = ref([])
 const courseDialogVisible = ref(false)
 const isCourseEdit = ref(false)
@@ -197,13 +346,30 @@ const openCourseDialog = (row) => {
 }
 
 const saveCourse = async () => {
-  if (isCourseEdit.value) {
-    await axios.put('/api/course', courseForm.value)
-  } else {
-    await axios.post('/api/course', courseForm.value)
+  try {
+    if (isCourseEdit.value) {
+      const res = await axios.put('/api/course', courseForm.value)
+      if (res.data.code === 200) {
+        ElMessage.success('修改成功')
+      } else {
+        ElMessage.error(res.data.msg)
+        return
+      }
+    } else {
+      const res = await axios.post('/api/course', courseForm.value)
+      if (res.data.code === 200) {
+        ElMessage.success('添加成功')
+      } else {
+        ElMessage.error(res.data.msg)
+        return
+      }
+    }
+    courseDialogVisible.value = false
+    loadCourses()
+  } catch (e) {
+    const msg = e.response?.data?.msg || '请求失败'
+    ElMessage.error(msg)
   }
-  courseDialogVisible.value = false
-  loadCourses()
 }
 
 const delCourse = async (id) => {
@@ -317,6 +483,126 @@ onMounted(() => {
 }
 
 .toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 16px;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ========== 课表视图 ========== */
+.timetable-wrapper {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  overflow-x: auto;
+  padding: 16px;
+}
+
+.timetable-grid {
+  display: grid;
+  grid-template-columns: 72px repeat(7, 1fr);
+  grid-template-rows: 40px repeat(28, 28px);
+  min-width: 800px;
+  position: relative;
+}
+
+.timetable-corner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #999;
+  border-bottom: 2px solid #e0e0e0;
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.timetable-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: #555;
+  border-bottom: 2px solid #e0e0e0;
+  background: #fafafa;
+}
+
+/* 周六/周日不同色 */
+.timetable-day-header:nth-child(7),
+.timetable-day-header:nth-child(8) {
+  color: #e57373;
+}
+
+.timetable-time-label {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  font-size: 11px;
+  color: #aaa;
+  padding-top: 2px;
+  border-right: 1px solid #f0f0f0;
+}
+
+.timetable-cell {
+  border-bottom: 1px solid #f5f5f5;
+  border-right: 1px solid #f0f0f0;
+}
+
+.timetable-cell-odd {
+  border-bottom: 1px solid #e8e8e8;
+}
+
+/* 课程卡片 */
+.timetable-course {
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin: 1px 3px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.15s, box-shadow 0.15s;
+  border-left: 4px solid;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.timetable-course:hover {
+  transform: scale(1.03);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  z-index: 10;
+}
+
+.tc-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tc-room,
+.tc-teacher,
+.tc-time {
+  font-size: 10px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timetable-empty {
+  text-align: center;
+  padding: 60px 0;
+  color: #999;
+  font-size: 16px;
 }
 </style>
