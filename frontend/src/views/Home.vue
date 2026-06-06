@@ -45,6 +45,14 @@
           <span class="sidebar-icon">📋</span>
           <span class="sidebar-text">作业管理</span>
         </div>
+        <div
+          class="sidebar-item"
+          :class="{ active: activeTab === 'exam' }"
+          @click="activeTab = 'exam'"
+        >
+          <span class="sidebar-icon">📝</span>
+          <span class="sidebar-text">考试管理</span>
+        </div>
       </div>
 
       <!-- 右侧内容区 -->
@@ -75,7 +83,6 @@
             <el-table :data="courses" border stripe style="width: 100%"
               @selection-change="onCourseSelectionChange">
               <el-table-column type="selection" width="45" />
-              <el-table-column prop="id" label="ID" width="60" />
               <el-table-column prop="name" label="课程名称" />
               <el-table-column prop="teacher" label="授课教师" />
               <el-table-column prop="classroom" label="教室" />
@@ -177,6 +184,11 @@
         <div v-show="activeTab === 'hw'">
           <Homework />
         </div>
+
+        <!-- ==================== 考试管理 ==================== -->
+        <div v-show="activeTab === 'exam'">
+          <Exam />
+        </div>
       </div>
     </div>
 
@@ -209,6 +221,7 @@ import { ElMessage } from 'element-plus'
 import KnowledgePoint from './KnowledgePoint.vue'
 import Dashboard from './Dashboard.vue'
 import Homework from './Homework.vue'
+import Exam from './Exam.vue'
 
 const router = useRouter()
 const activeTab = ref('dashboard')

@@ -22,6 +22,50 @@
       </div>
     </div>
 
+    <!-- ========== 数据统计卡片 ========== -->
+    <div class="stats-cards">
+      <div class="stats-card courses">
+        <div class="stats-card-icon">📚</div>
+        <div class="stats-card-body">
+          <span class="stats-card-num">{{ stats.totalCourses }}</span>
+          <span class="stats-card-label">课程总数</span>
+        </div>
+      </div>
+      <div class="stats-card points">
+        <div class="stats-card-icon">📖</div>
+        <div class="stats-card-body">
+          <span class="stats-card-num">{{ stats.totalKnowledgePoints }}</span>
+          <span class="stats-card-label">知识点总数</span>
+        </div>
+      </div>
+      <div class="stats-card mastered">
+        <div class="stats-card-icon">✅</div>
+        <div class="stats-card-body">
+          <span class="stats-card-num">{{ stats.mastered }}</span>
+          <span class="stats-card-label">已掌握</span>
+        </div>
+      </div>
+      <div class="stats-card tolearn">
+        <div class="stats-card-icon">📝</div>
+        <div class="stats-card-body">
+          <span class="stats-card-num">{{ stats.notStarted + stats.learning }}</span>
+          <span class="stats-card-label">待学习</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== ECharts 图表区 ========== -->
+    <div class="charts-row">
+      <div class="chart-panel">
+        <h3 class="chart-title">📊 课程分布（按星期）</h3>
+        <div ref="courseChartRef" class="chart-box"></div>
+      </div>
+      <div class="chart-panel">
+        <h3 class="chart-title">📈 学习进度</h3>
+        <div ref="progressChartRef" class="chart-box"></div>
+      </div>
+    </div>
+
     <!-- 今日课程区域 -->
     <div class="dash-section">
       <h2 class="dash-section-title">📖 今日课程</h2>
@@ -33,19 +77,16 @@
 
       <div v-else class="today-timeline">
         <div v-for="(c, idx) in sortedTodayCourses" :key="c.id" class="today-card-wrapper">
-          <!-- 时间线连接 -->
           <div class="timeline-connector" v-if="idx < sortedTodayCourses.length - 1"></div>
 
           <div class="today-card"
             :class="{ 'is-now': c.isOngoing, 'is-next': idx === nextCourseIndex }"
             :style="{ borderLeftColor: c.palette.border, background: c.palette.bg }">
-            <!-- 时间标签 -->
             <div class="today-time">
               <div class="time-start">{{ c.startTime }}</div>
               <div class="time-divider"></div>
               <div class="time-end">{{ c.endTime }}</div>
             </div>
-            <!-- 课程信息 -->
             <div class="today-info">
               <div class="today-name">
                 {{ c.name }}
@@ -62,7 +103,6 @@
                 <span class="today-detail">⏱ {{ c.duration }}</span>
               </div>
             </div>
-            <!-- 进度条 -->
             <div class="today-progress" v-if="c.isOngoing">
               <div class="progress-bar">
                 <div class="progress-fill" :style="{ width: c.progressPercent + '%' }"></div>
@@ -77,11 +117,25 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import axios from 'axios'
+import * as echarts from 'echarts'
 
 const courses = ref([])
 const homeworks = ref([])
+const stats = ref({
+  totalCourses: 0,
+  totalKnowledgePoints: 0,
+  mastered: 0,
+  learning: 0,
+  notStarted: 0
+})
+
+// ECharts refs
+const courseChartRef = ref(null)
+const progressChartRef = ref(null)
+let courseChart = null
+let progressChart = null
 
 const COURSE_COLORS = [
   { bg: '#e8f4fd', border: '#2196f3' },
@@ -124,7 +178,6 @@ const todayLabel = `星期${['日','一','二','三','四','五','六'][now.getD
 const todayDate = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`
 const todayWeekday = `周${['日','一','二','三','四','五','六'][now.getDay()]}`
 
-// 今日课程
 const todayCourses = computed(() => {
   return courses.value
     .filter(c => c.weekday === todayWeekday)
@@ -155,12 +208,10 @@ const todayCourses = computed(() => {
     })
 })
 
-// 按开始时间排序
 const sortedTodayCourses = computed(() => {
   return [...todayCourses.value].sort((a, b) => a.startMin - b.startMin)
 })
 
-// 找到 "即将开始" 的课程索引（当前时间之后、最近的一节课）
 const nextCourseIndex = computed(() => {
   const currentMin = now.getHours() * 60 + now.getMinutes()
   let idx = -1
@@ -177,7 +228,6 @@ const nextCourseIndex = computed(() => {
   return idx
 })
 
-// 即将截止作业数
 const dueSoonCount = computed(() => {
   return homeworks.value.filter(h => {
     if (!h.deadline || h.status === 1) return false
@@ -187,10 +237,140 @@ const dueSoonCount = computed(() => {
   }).length
 })
 
-// 未完成作业数
 const unfinishedCount = computed(() => {
   return homeworks.value.filter(h => h.status === 0).length
 })
+
+// ========== 渲染图表 ==========
+function renderCourseChart(data) {
+  if (!courseChartRef.value) return
+  if (!courseChart) {
+    courseChart = echarts.init(courseChartRef.value)
+  }
+  const weekdays = Object.keys(data)
+  const values = Object.values(data)
+
+  courseChart.setOption({
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' }
+    },
+    grid: { left: '3%', right: '8%', bottom: '3%', top: '8%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: weekdays,
+      axisLabel: { fontSize: 12 },
+      axisTick: { alignWithLabel: true }
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLabel: { fontSize: 12 }
+    },
+    series: [{
+      name: '课程数',
+      type: 'bar',
+      data: values,
+      itemStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: '#409eff' },
+          { offset: 1, color: '#79bbff' }
+        ]),
+        borderRadius: [6, 6, 0, 0]
+      },
+      barWidth: '50%',
+      label: {
+        show: true,
+        position: 'top',
+        fontSize: 13,
+        fontWeight: 'bold',
+        color: '#333'
+      }
+    }]
+  })
+}
+
+function renderProgressChart(data) {
+  if (!progressChartRef.value) return
+  if (!progressChart) {
+    progressChart = echarts.init(progressChartRef.value)
+  }
+
+  const colors = ['#67c23a', '#e6a23c', '#f56c6c']
+  const total = data.reduce((sum, item) => sum + item.value, 0)
+
+  progressChart.setOption({
+    tooltip: {
+      trigger: 'item',
+      formatter: (p) => {
+        const pct = total > 0 ? ((p.value / total) * 100).toFixed(1) : 0
+        return `${p.name}: ${p.value} (${pct}%)`
+      }
+    },
+    legend: {
+      orient: 'vertical',
+      right: '5%',
+      top: 'center',
+      textStyle: { fontSize: 13 }
+    },
+    series: [{
+      name: '学习进度',
+      type: 'pie',
+      radius: ['50%', '75%'],
+      center: ['40%', '50%'],
+      avoidLabelOverlap: false,
+      itemStyle: {
+        borderRadius: 4,
+        borderColor: '#fff',
+        borderWidth: 3
+      },
+      label: {
+        show: true,
+        position: 'inside',
+        formatter: (p) => {
+          const pct = total > 0 ? ((p.value / total) * 100).toFixed(1) : 0
+          return `${pct}%`
+        },
+        fontSize: 13,
+        fontWeight: 'bold'
+      },
+      emphasis: {
+        label: { fontSize: 18, fontWeight: 'bold' }
+      },
+      data: data.map((item, i) => ({
+        ...item,
+        itemStyle: { color: colors[i] }
+      }))
+    }]
+  })
+}
+
+// 获取统计数据
+async function loadStatistics() {
+  try {
+    const res = await axios.get('/api/statistics')
+    const data = res.data
+    stats.value = {
+      totalCourses: data.totalCourses || 0,
+      totalKnowledgePoints: data.totalKnowledgePoints || 0,
+      mastered: data.mastered || 0,
+      learning: data.learning || 0,
+      notStarted: data.notStarted || 0
+    }
+
+    await nextTick()
+    renderCourseChart(data.courseDistribution || {})
+    renderProgressChart(data.learningProgress || [])
+  } catch (e) {
+    console.error('加载统计数据失败:', e)
+  }
+}
+
+// 窗口大小变化时重绘图表
+function handleResize() {
+  courseChart?.resize()
+  progressChart?.resize()
+}
 
 onMounted(async () => {
   try {
@@ -203,12 +383,15 @@ onMounted(async () => {
   } catch (e) {
     // ignore
   }
+
+  await loadStatistics()
+  window.addEventListener('resize', handleResize)
 })
 </script>
 
 <style scoped>
 .dashboard {
-  height: 100%;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -261,6 +444,95 @@ onMounted(async () => {
   opacity: 0.85;
 }
 
+/* ========== 统计卡片 ========== */
+.stats-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.stats-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  border-radius: 12px;
+  color: #fff;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.stats-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+
+.stats-card.courses {
+  background: linear-gradient(135deg, #409eff, #2d6cdf);
+}
+
+.stats-card.points {
+  background: linear-gradient(135deg, #e6a23c, #d48806);
+}
+
+.stats-card.mastered {
+  background: linear-gradient(135deg, #67c23a, #3e8e41);
+}
+
+.stats-card.tolearn {
+  background: linear-gradient(135deg, #f56c6c, #c62828);
+}
+
+.stats-card-icon {
+  font-size: 36px;
+  flex-shrink: 0;
+}
+
+.stats-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.stats-card-num {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.stats-card-label {
+  font-size: 13px;
+  opacity: 0.9;
+  margin-top: 2px;
+}
+
+/* ========== 图表区 ========== */
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.chart-panel {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.chart-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: #333;
+}
+
+.chart-box {
+  width: 100%;
+  height: 280px;
+}
+
 /* ========== section ========== */
 .dash-section {
   background: #fff;
@@ -270,7 +542,7 @@ onMounted(async () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-height: 200px;
 }
 
 .dash-section-title {
@@ -338,7 +610,6 @@ onMounted(async () => {
   box-shadow: 0 0 0 2px rgba(230, 162, 60, 0.2);
 }
 
-/* 时间列 */
 .today-time {
   display: flex;
   flex-direction: column;
@@ -364,7 +635,6 @@ onMounted(async () => {
   margin: 6px 0;
 }
 
-/* 课程信息 */
 .today-info {
   flex: 1;
   min-width: 0;
@@ -400,7 +670,6 @@ onMounted(async () => {
   color: #777;
 }
 
-/* 进度条 */
 .today-progress {
   display: flex;
   align-items: center;
