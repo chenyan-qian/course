@@ -53,6 +53,14 @@
           <span class="sidebar-icon">📝</span>
           <span class="sidebar-text">考试管理</span>
         </div>
+        <div
+          class="sidebar-item"
+          :class="{ active: activeTab === 'ai' }"
+          @click="activeTab = 'ai'"
+        >
+          <span class="sidebar-icon">🤖</span>
+          <span class="sidebar-text">AI助手</span>
+        </div>
       </div>
 
       <!-- 右侧内容区 -->
@@ -60,6 +68,11 @@
         <!-- ==================== 首页 ==================== -->
         <div v-show="activeTab === 'dashboard'" class="content-page content-page-dashboard">
           <Dashboard />
+        </div>
+
+        <!-- ==================== AI助手 ==================== -->
+        <div v-show="activeTab === 'ai'" class="content-page content-page-ai">
+          <AiAssistant />
         </div>
 
         <!-- ==================== 课程管理 ==================== -->
@@ -173,6 +186,92 @@
               <el-button type="primary" @click="saveCourse">保存</el-button>
             </template>
           </el-dialog>
+
+          <!-- OCR 图片识别导入弹窗 -->
+          <el-dialog v-model="ocrDialogVisible" title="📷 图片识别导入课程" width="700px" @close="ocrDialogVisible = false">
+            <!-- Step 1: 上传图片 -->
+            <div v-if="!ocrResult" class="ocr-upload-area">
+              <div class="ocr-upload-hint">
+                <p>请上传课程表截图，系统将自动识别课程信息。</p>
+                <p style="color:#999;font-size:13px;">支持 JPG、PNG 格式，建议清晰表格图片</p>
+              </div>
+              <el-upload
+                class="ocr-upload"
+                drag
+                :auto-upload="false"
+                :limit="1"
+                accept="image/*"
+                :on-change="onOcrFileChange"
+                :file-list="ocrFileList"
+              >
+                <div class="el-upload__text">
+                  <span style="font-size:48px;">📸</span>
+                  <p>点击或拖拽图片到此区域上传</p>
+                </div>
+              </el-upload>
+              <div style="text-align:center;margin-top:16px;">
+                <el-button type="primary" :loading="ocrLoading" :disabled="!ocrFile" @click="doOcrRecognize">
+                  🔍 开始识别
+                </el-button>
+              </div>
+            </div>
+
+            <!-- Step 2: 识别结果 -->
+            <div v-else>
+              <!-- 有原始文本（无法解析出结构化数据时） -->
+              <div v-if="ocrResult.length === 1 && ocrResult[0]._rawText" style="margin-bottom:12px;">
+                <el-alert title="未能自动解析课程，以下为识别到的原始文字，请手动添加" type="warning" :closable="false" show-icon />
+                <pre class="ocr-raw-text">{{ ocrResult[0]._rawText }}</pre>
+              </div>
+
+              <!-- 结构化课程数据 -->
+              <div v-else>
+                <el-alert :title="`识别到 ${ocrResult.length} 门课程，请确认后导入`" type="success" :closable="false" show-icon style="margin-bottom:12px;" />
+                <el-table :data="ocrResult" border stripe max-height="320" @selection-change="onOcrSelectionChange">
+                  <el-table-column type="selection" width="40" />
+                  <el-table-column label="课程名称">
+                    <template #default="{ row }">
+                      <el-input v-model="row.name" size="small" placeholder="课程名称" />
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="教师" width="100">
+                    <template #default="{ row }">
+                      <el-input v-model="row.teacher" size="small" placeholder="教师" />
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="教室" width="110">
+                    <template #default="{ row }">
+                      <el-input v-model="row.classroom" size="small" placeholder="教室" />
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="星期" width="80">
+                    <template #default="{ row }">
+                      <el-select v-model="row.weekday" size="small">
+                        <el-option v-for="d in ['周一','周二','周三','周四','周五','周六','周日']" :key="d" :label="d" :value="d" />
+                      </el-select>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="时间" width="130">
+                    <template #default="{ row }">
+                      <el-input v-model="row.timeSlot" size="small" placeholder="如 8:00-9:30" />
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+
+              <div style="text-align:center;margin-top:16px;display:flex;justify-content:center;gap:12px;">
+                <el-button @click="ocrReset">重新上传</el-button>
+                <el-button
+                  type="primary"
+                  :loading="ocrImporting"
+                  :disabled="ocrSelectedToImport.length === 0"
+                  @click="doOcrImport"
+                >
+                  ✅ 确认导入 ({{ ocrSelectedToImport.length }})
+                </el-button>
+              </div>
+            </div>
+          </el-dialog>
         </div>
 
         <!-- ==================== 知识点管理 ==================== -->
@@ -222,6 +321,7 @@ import KnowledgePoint from './KnowledgePoint.vue'
 import Dashboard from './Dashboard.vue'
 import Homework from './Homework.vue'
 import Exam from './Exam.vue'
+import AiAssistant from './AiAssistant.vue'
 
 const router = useRouter()
 const activeTab = ref('dashboard')
@@ -420,6 +520,135 @@ const batchDelCourse = async () => {
   loadCourses()
 }
 
+// ========== OCR 图片识别导入 ==========
+const ocrDialogVisible = ref(false)
+const ocrLoading = ref(false)
+const ocrImporting = ref(false)
+const ocrFile = ref(null)
+const ocrFileList = ref([])
+const ocrResult = ref(null)
+const ocrSelectedToImport = ref([])
+
+const openOcrDialog = () => {
+  ocrReset()
+  ocrDialogVisible.value = true
+}
+
+const onOcrFileChange = (file) => {
+  ocrFile.value = file.raw
+  ocrFileList.value = [file]
+}
+
+const doOcrRecognize = async () => {
+  if (!ocrFile.value) {
+    ElMessage.warning('请先选择图片')
+    return
+  }
+  ocrLoading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', ocrFile.value)
+
+    // Step 1: 阿里云 OCR 识别文字
+    const ocrRes = await axios.post('/api/ocr/recognize', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+
+    if (ocrRes.data.code !== 200) {
+      ElMessage.error(ocrRes.data.msg)
+      return
+    }
+
+    // 获取 OCR 原始文本（适配不同返回格式）
+    let ocrText = ''
+    const ocrData = ocrRes.data.data
+
+    if (Array.isArray(ocrData)) {
+      // 如果是数组，提取 _rawText 字段
+      ocrText = ocrData.map(r => r._rawText || r.text || '').join('\n')
+    } else if (typeof ocrData === 'string') {
+      // 如果直接是字符串
+      ocrText = ocrData
+    } else if (ocrData && ocrData.content) {
+      // 阿里云 OCR 返回 content 字段
+      ocrText = ocrData.content
+    } else if (ocrData && ocrData.text) {
+      // 如果有 text 字段
+      ocrText = ocrData.text
+    }
+
+    if (!ocrText || !ocrText.trim()) {
+      ElMessage.warning('OCR 未识别到文字')
+      return
+    }
+
+    console.log('[AI] OCR 识别到的文本:', ocrText.substring(0, 200))
+
+    // Step 2: AI 解析课程结构
+    const aiRes = await axios.post('/api/llm/recognize-course', {
+      ocrText: ocrText
+    })
+
+    if (aiRes.data.code === 200) {
+      try {
+        // 解析 AI 返回的 JSON
+        const coursesData = JSON.parse(aiRes.data.data)
+        ocrResult.value = coursesData
+        ocrSelectedToImport.value = coursesData
+        ElMessage.success(`AI 成功识别 ${coursesData.length} 门课程`)
+      } catch (e) {
+        console.error('[AI] JSON 解析失败:', e)
+        ElMessage.warning('AI 解析失败，显示原始文字')
+        ocrResult.value = [{ _rawText: ocrText }]
+        ocrSelectedToImport.value = []
+      }
+    } else {
+      ElMessage.error(aiRes.data.msg)
+    }
+  } catch (e) {
+    console.error('[OCR] 识别异常:', e)
+    ElMessage.error('识别请求失败: ' + (e.response?.data?.msg || e.message))
+  } finally {
+    ocrLoading.value = false
+  }
+}
+
+const onOcrSelectionChange = (rows) => {
+  ocrSelectedToImport.value = rows
+}
+
+const doOcrImport = async () => {
+  if (ocrSelectedToImport.value.length === 0) {
+    ElMessage.warning('请选择要导入的课程')
+    return
+  }
+  ocrImporting.value = true
+  try {
+    const res = await axios.post('/api/ocr/import', ocrSelectedToImport.value)
+    if (res.data.code === 200) {
+      ElMessage.success(res.data.msg)
+      if (res.data.errors && res.data.errors.length > 0) {
+        res.data.errors.forEach(e => ElMessage.warning(e))
+      }
+      ocrDialogVisible.value = false
+      loadCourses()
+    } else {
+      ElMessage.error(res.data.msg)
+    }
+  } catch (e) {
+    ElMessage.error('导入请求失败')
+  } finally {
+    ocrImporting.value = false
+  }
+}
+
+const ocrReset = () => {
+  ocrResult.value = null
+  ocrFile.value = null
+  ocrFileList.value = []
+  ocrSelectedToImport.value = []
+}
+
 // ========== 退出 ==========
 const logout = () => {
   localStorage.removeItem('token')
@@ -510,6 +739,10 @@ onMounted(() => {
 }
 
 .content-page-dashboard {
+  height: 100%;
+}
+
+.content-page-ai {
   height: 100%;
 }
 
@@ -635,5 +868,39 @@ onMounted(() => {
   padding: 60px 0;
   color: #999;
   font-size: 16px;
+}
+
+/* ========== OCR 图片识别 ========== */
+.ocr-upload-area {
+  padding: 8px 0;
+}
+
+.ocr-upload-hint {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.ocr-upload-hint p {
+  margin: 4px 0;
+  font-size: 15px;
+  color: #333;
+}
+
+.ocr-upload {
+  width: 100%;
+}
+
+.ocr-raw-text {
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  max-height: 300px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin-top: 12px;
 }
 </style>

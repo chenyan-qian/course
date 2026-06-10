@@ -5,8 +5,26 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/course_db?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf-8
-    username: root
-    password: jcy803915
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# Jackson JSON 序列化配置
+spring.jackson:
+  deserialization:
+    fail-on-unknown-properties: false
+
+# 阿里云OCR配置 (通过环境变量设置)
+aliyun:
+  ocr:
+    access-key-id: ${ALIYUN_ACCESS_KEY_ID:}
+    access-key-secret: ${ALIYUN_ACCESS_KEY_SECRET:}
+    endpoint: ocr-api.cn-hangzhou.aliyuncs.com
+  dashscope:
+    api-key: ${DASHSCOPE_API_KEY:}
 
 mybatis-plus:
   configuration:

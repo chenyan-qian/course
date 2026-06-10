@@ -3,12 +3,26 @@ package com.course.service;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.course.entity.Course;
 import com.course.mapper.CourseMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
 public class CourseService extends ServiceImpl<CourseMapper, Course> {
+
+    @Autowired
+    private ExamService examService;
+
+    public void deleteCourse(Long id) {
+        if (id == null) {
+            throw new RuntimeException("课程ID不能为空");
+        }
+        
+        examService.deleteByCourseId(id);
+        
+        removeById(id);
+    }
 
     /**
      * 检查课程时间是否与已有课程冲突

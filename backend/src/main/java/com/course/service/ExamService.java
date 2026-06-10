@@ -7,4 +7,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ExamService extends ServiceImpl<ExamMapper, Exam> {
+
+    public void deleteByCourseId(Long courseId) {
+        baseMapper.deleteByCourseId(courseId);
+    }
 }
